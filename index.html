@@ -1,377 +1,52 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Rich's Brain — Perry Tech Support</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --blue-dark: #1a3a5c;
-    --blue-mid: #1e5fa8;
-    --blue-light: #3b82d4;
-    --gold: #f5a623;
-    --gold-dark: #d4881a;
-    --white: #ffffff;
-    --gray-100: #f1f5f9;
-    --gray-200: #e2e8f0;
-    --gray-400: #94a3b8;
-    --gray-600: #475569;
-    --gray-800: #1e293b;
-    --green: #22c55e;
-    --radius: 14px;
-    --radius-sm: 9px;
-    --shadow: 0 2px 16px rgba(26,58,92,0.10);
+export default {
+  async fetch(request, env) {
+
+    // Allow CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        }
+      });
+    }
+
+    if (request.method !== 'POST') {
+      return new Response('Method not allowed', { status: 405 });
+    }
+
+    try {
+      const body = await request.json();
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+
+      return new Response(JSON.stringify(data), {
+        status: response.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        }
+      });
+    }
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; font-family: 'Nunito', sans-serif; background: #f0f4f9; overflow: hidden; }
-
-  .app { display: flex; flex-direction: column; height: 100vh; background: #f0f4f9; }
-
-  /* HEADER */
-  .header {
-    background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-mid) 100%);
-    padding: 12px 18px;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 12px rgba(26,58,92,0.25);
-  }
-  .brain-orb {
-    width: 42px; height: 42px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 21px; flex-shrink: 0;
-    box-shadow: 0 0 0 3px rgba(245,166,35,0.3);
-    animation: glow 3s ease-in-out infinite;
-  }
-  @keyframes glow {
-    0%,100% { box-shadow: 0 0 0 3px rgba(245,166,35,0.3); }
-    50%      { box-shadow: 0 0 0 7px rgba(245,166,35,0.15), 0 0 18px rgba(245,166,35,0.25); }
-  }
-  .header-info { flex: 1; }
-  .header-info h1 { font-size: 1.1rem; font-weight: 900; color: var(--white); line-height: 1.1; }
-  .header-info h1 span { color: var(--gold); }
-  .header-info p { font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
-  .online-badge {
-    display: flex; align-items: center; gap: 5px;
-    background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3);
-    border-radius: 20px; padding: 4px 10px;
-    font-size: 0.7rem; font-weight: 800; color: var(--green);
-  }
-  .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: blink 2s ease-in-out infinite; }
-  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
-
-  /* CHIPS */
-  .chips-bar {
-    background: var(--white); border-bottom: 1px solid var(--gray-200);
-    padding: 7px 14px; display: flex; gap: 6px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none;
-  }
-  .chips-bar::-webkit-scrollbar { display: none; }
-  .chip {
-    padding: 4px 11px; background: var(--gray-100); border: 1.5px solid var(--gray-200);
-    border-radius: 20px; font-family: 'Nunito', sans-serif; font-size: 0.76rem; font-weight: 700;
-    color: var(--gray-600); cursor: pointer; white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
-  }
-  .chip:hover { background: #dbeafe; border-color: var(--blue-light); color: var(--blue-mid); }
-
-  /* MESSAGES */
-  #messages {
-    flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 13px;
-    scrollbar-width: thin; scrollbar-color: var(--gray-200) transparent;
-  }
-  #messages::-webkit-scrollbar { width: 4px; }
-  #messages::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
-
-  .msg { display: flex; gap: 8px; align-items: flex-end; animation: pop-in 0.2s ease-out; }
-  @keyframes pop-in { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
-  .msg.user { flex-direction: row-reverse; }
-
-  .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
-  .msg.bot .avatar { background: linear-gradient(135deg, var(--gold), var(--gold-dark)); }
-  .msg.user .avatar { background: var(--blue-mid); font-size: 11px; font-weight: 900; color: white; font-family: 'Nunito', sans-serif; }
-
-  .bubble { max-width: 80%; padding: 10px 14px; border-radius: 15px; font-size: 0.88rem; line-height: 1.6; box-shadow: var(--shadow); }
-  .msg.bot .bubble { background: var(--white); color: var(--gray-800); border-bottom-left-radius: 4px; }
-  .msg.user .bubble { background: linear-gradient(135deg, var(--blue-mid), var(--blue-dark)); color: var(--white); border-bottom-right-radius: 4px; }
-
-  .msg.bot .bubble strong { font-weight: 800; color: var(--blue-dark); }
-  .msg.bot .bubble code { background: var(--gray-100); border-radius: 4px; padding: 1px 5px; font-family: 'DM Mono', monospace; font-size: 0.81em; color: var(--blue-mid); }
-  .msg.bot .bubble ol, .msg.bot .bubble ul { padding-left: 17px; margin: 4px 0; display: flex; flex-direction: column; gap: 3px; }
-  .msg.bot .bubble p { margin-bottom: 4px; }
-  .msg.bot .bubble p:last-child { margin-bottom: 0; }
-  .msg.bot .bubble h3 { font-size: 0.9rem; font-weight: 800; color: var(--blue-dark); margin: 5px 0 2px; }
-  .msg.bot .bubble a { color: var(--blue-mid); font-weight: 700; }
-
-  .typing { display: flex; gap: 5px; align-items: center; padding: 3px 2px; }
-  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--gray-400); animation: bounce 1.2s ease-in-out infinite; }
-  .typing span:nth-child(2){animation-delay:.2s} .typing span:nth-child(3){animation-delay:.4s}
-  @keyframes bounce { 0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1} }
-
-  /* INPUT */
-  .input-area {
-    background: var(--white); border-top: 1px solid var(--gray-200);
-    padding: 10px 14px; display: flex; gap: 9px; align-items: flex-end; flex-shrink: 0;
-  }
-  #user-input {
-    flex: 1; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm);
-    padding: 9px 13px; font-family: 'Nunito', sans-serif; font-size: 0.88rem; font-weight: 600;
-    color: var(--gray-800); resize: none; outline: none; min-height: 40px; max-height: 100px;
-    line-height: 1.5; transition: border-color 0.2s; background: var(--gray-100);
-  }
-  #user-input:focus { border-color: var(--blue-light); background: var(--white); }
-  #user-input::placeholder { color: var(--gray-400); }
-  #send-btn {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
-    border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-    box-shadow: 0 2px 8px rgba(245,166,35,0.4);
-  }
-  #send-btn:hover  { transform: scale(1.07); box-shadow: 0 3px 14px rgba(245,166,35,0.5); }
-  #send-btn:active { transform: scale(0.95); }
-  #send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
-  #send-btn svg { width: 16px; height: 16px; fill: var(--blue-dark); }
-
-  .toast {
-    position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
-    background: #ef4444; color: white; padding: 8px 16px; border-radius: 9px;
-    font-size: 0.8rem; font-weight: 700; z-index: 999; animation: pop-in 0.2s ease-out;
-    max-width: 90%; text-align: center;
-  }
-</style>
-</head>
-<body>
-<div class="app">
-
-  <div class="header">
-    <div class="brain-orb">🧠</div>
-    <div class="header-info">
-      <h1>Rich's <span>Brain</span></h1>
-      <p>Perry Community Schools · Tech Support</p>
-    </div>
-    <div class="online-badge"><div class="online-dot"></div>Online</div>
-  </div>
-
-  <div class="chips-bar">
-    <button class="chip" onclick="quickAsk('I forgot my Google password')">🔐 Password Reset</button>
-    <button class="chip" onclick="quickAsk('My Chromebook won\'t turn on')">💻 Chromebook Help</button>
-    <button class="chip" onclick="quickAsk('I can\'t connect to school Wi-Fi')">📶 Wi-Fi Issues</button>
-    <button class="chip" onclick="quickAsk('How do I add a printer?')">🖨️ Add a Printer</button>
-    <button class="chip" onclick="quickAsk('How do I send a fax?')">📠 Send a Fax</button>
-    <button class="chip" onclick="quickAsk('How do I check my voicemail?')">📞 Voicemail</button>
-    <button class="chip" onclick="quickAsk('When is spring break?')">📅 School Calendar</button>
-    <button class="chip" onclick="quickAsk('Google Classroom isn\'t loading')">🏫 Google Classroom</button>
-  </div>
-
-  <div id="messages"></div>
-
-  <div class="input-area">
-    <textarea id="user-input" placeholder="Ask me anything about school tech…" rows="1"></textarea>
-    <button id="send-btn" onclick="sendMessage()" title="Send">
-      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-    </button>
-  </div>
-
-</div>
-<script>
-// ── PASTE YOUR ANTHROPIC API KEY BELOW ──────────────────────────────
-const API_KEY = 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;
-// ────────────────────────────────────────────────────────────────────
-
-const SYSTEM_PROMPT = `You are Rich's Brain, the friendly tech support assistant for Perry Community Schools. Help students and teachers/staff solve technology problems quickly.
-
-PERSONA: Warm and encouraging for students; efficient and collegial for staff. Light humor is fine but stay focused. Never condescending. Keep responses concise — use numbered steps and bold key actions. On the very first message, greet as Rich's Brain with a brief welcome.
-
-DISTRICT ENVIRONMENT: Devices: Chromebooks (students+staff), Windows laptops/desktops (staff). Accounts: Google Workspace for Education. OS: ChromeOS and Windows 10/11. Phones: Audix voicemail system. Fax: eGoldFax (email-based).
-
-LOGIN & PASSWORD:
-Students: 1) Use school Google account (firstname.lastname@[district].org), 2) Check CAPS LOCK, 3) Forgot Password link on Google sign-in, 4) If reset fails visit school office or media center, 5) Still stuck → IT.
-Staff: 1) myaccount.google.com recovery, 2) Check not using personal Gmail, 3) SSO locked → IT immediately.
-
-CHROMEBOOK:
-Won't turn on: 1) Hold power 3 sec, 2) Plug in charger wait 5 min, 3) Hard reset: hold Refresh+Power 10 sec, 4) Still off → IT.
-Slow/freezing: 1) Close unused tabs, 2) Sign out and back in, 3) Powerwash (Settings→Advanced→Reset→Powerwash — WARNING wipes local files, Drive safe), 4) Still slow → IT.
-Physical damage → IT immediately.
-
-WINDOWS (STAFF):
-Won't boot: Hold power to force off, wait 10 sec, restart. Windows Update screen: wait 20 min. Still stuck → IT.
-Slow: Restart fully, close programs, Task Manager (Ctrl+Shift+Esc), run Windows Update. Persistent → IT.
-Can't log in: Must be on school Wi-Fi or ethernet. Use Google Workspace credentials. Domain locked → IT.
-
-GOOGLE WORKSPACE:
-Classroom: Can't see class → re-invite or check using school account not personal Gmail. Not submitting → check internet, new tab, Drive storage. Meet not loading → try incognito.
-Drive: Storage full → likely personal account (school = unlimited). Missing file → check Trash and Shared with Me.
-Gmail: Not receiving → Spam and Filters. Can't send → verify address, students may have external email restricted.
-Meet: Mic/camera → click lock icon in browser address bar → allow. Can't join → confirm signed into school account.
-
-WI-FI:
-Chromebook: 1) Click Wi-Fi icon bottom-right, 2) Select school network, 3) Forget and reconnect (Settings→Wi-Fi→network→Forget), 4) Restart. Still failing → IT.
-Windows: 1) Click Wi-Fi in taskbar, 2) Right-click→Troubleshoot, 3) Forget and reconnect, 4) Restart. Persistent → IT.
-Connected but no internet: Try google.com, sign out/back in on Chromebook, restart. Building-wide → IT (outage).
-
-PRINTING:
-Can't find printer: 1) Must be on school Wi-Fi, 2) Chromebook: Settings→Advanced→Printing→Printers→Add Printer (use IP below), 3) Windows: Settings→Devices→Printers→Add→not listed→by IP address.
-Won't print: 1) Check paper/jams, 2) Cancel pending jobs, 3) Restart printer (off 30 sec), 4) Delete and re-add. Still stuck → IT.
-Streaks/faded → low toner → IT or building secretary.
-
-PRINTER IPs by building:
-HS: Activities 10.10.40.87, Bluejay 10.10.40.16, FineArts 10.10.40.162, HS_G-Color 10.10.40.67, HS-Cart1 OFFLINE, HS-Cart2 10.10.40.14, HS-Cart3 10.10.37.37, HS-Cart4 10.10.40.61, HS-Off-CLR 10.10.20.35, HSCopierMain 10.10.13.1, HSGuidance 10.10.44.117, HSGuidanceCopier 10.10.20.1, HSTechLab 10.10.44.78, IJAG OFFLINE, Kitchen 10.10.40.34, Lab-CLR 10.10.40.104, North 10.10.40.11, South 10.10.40.7, Chelsie Printer 10.10.40.103.
-MS: 6th Grade 10.20.40.40, 7th Grade 10.20.20.85, 8th Grade 10.20.42.176, Concourse 10.20.42.169, MS Guidance 10.20.40.106, MS Guidance Color 10.20.40.139, MS Main Copier 10.20.40.52, MS Office 10.20.40.109, MS-Color-Copier 10.20.2.5, SUCCESS 10.60.60.200, Technology Office 10.20.40.119, Transportation Center 10.20.40.14, STEM 10.20.40.132, Mandy Office 10.20.40.25.
-ES: 1st 10.30.40.80, 2nd 10.30.46.227, 3rd 10.30.46.220, 4th 10.30.40.47, 5th 10.30.40.59, Kinder 10.30.40.39, Kitchen 10.30.40.65, Lanier 10.30.40.66, Lanier Main 10.30.2.2, Office Color 10.30.46.100, Office LZR 10.30.37.37, PACES 10.30.40.154, SPED_CLR 10.30.40.113, SPED-Pod 10.30.42.251, TAG 10.30.40.228, Technology 10.30.40.60, New Color Copier 10.30.30.164, New B&W Copier 10.30.30.163, EL-Cannon 10.30.40.5.
-SAC: Accnt 10.50.50.52, Kent 10.50.50.56, Lanier 10.50.50.1, SAC_CLR 10.50.50.205, Samsung 10.50.50.20.
-
-FAXING (eGoldFax — email-based, no physical fax machine):
-From computer/phone: Email to FaxNumber@egoldfax.com (e.g. 5155551234@egoldfax.com). Subject/body = cover sheet. Attach file (Word/Excel/PDF/JPEG/TIFF/BMP). Send — confirmation email follows.
-From copier/MFP: Scan-to-Email → enter FaxNumber@egoldfax.com in To field → Scan.
-Receiving: Incoming faxes arrive automatically as PDF email attachments.
-Notes: No hyphens/parentheses needed. "1" prefix optional. Parentheses NOT allowed.
-
-AUDIX VOICEMAIL:
-Login: Dial 3456 internally → extension+# → password+#. From outside: call 465-3417, press 7. New staff initial password: 9 (change on first login, 5-15 digits).
-Check messages: Press 2 → 0 to listen → 1 respond/forward, # skip, *D delete.
-Send voicemail: Press 1 → record → 1 done → # approve → extension+# → # send.
-Change greeting: Press 3 → 1 create/change → 2 greeting number → record → 1 done → # approve.
-Change password: Press 5 → 4 → new password+# → confirm+#.
-Quick scan: Press 7 → 1 headers+messages, 2 headers only, 3 messages only.
-Limits: 5-min max message, 15-day retention. Key contacts: Technology Office x5496, Rich Nichols x8342, Nancy Iben x8343, Emily Yost x8348.
-
-SCHOOL CALENDAR 2026-2027:
-First Day (1st-12th): Aug 25 2026. PK: Aug 31. End Q1: Oct 16. Conferences: Oct 19-22. Thanksgiving Break: Nov 25-27. End Q2/Sem1: Dec 22 (2-hr early dismissal). Winter Break: Dec 23-Jan 1. Sem2 begins: Jan 5 2027. End Q3: Mar 11. Spring Break: Mar 15-19. End Q4/Sem2: May 24. Seniors last day: May 20. Last day: May 27 (early dismissal). Graduation: May 30. Memorial Day: May 31.
-No School PD Days: Aug 18-24, Sep 28, Oct 12, Nov 9, Jan 4, Jan 18, Feb 15, May 28.
-Snow day makeups: May 28, Jun 1, Jun 2, Jun 3, Jun 4.
-School hours: Elementary 8:05am-3:05pm. MS/HS 7:55am-2:50pm.
-
-ESCALATION — when issue can't be resolved, tell user: "This one needs a human touch! Please contact IT — call x5496 (Technology Office) or Rich Nichols at x8342. Tell them: [summarize issue and steps tried]."
-
-OUT OF SCOPE: Grades/assignments → "That's outside my wiring — check with your teacher or office." Personal devices → "I help with district devices only." Network policy → escalate to IT.`;
-
-let history = [];
-let loading = false;
-
-const textarea = document.getElementById('user-input');
-textarea.addEventListener('input', () => { textarea.style.height = 'auto'; textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px'; });
-textarea.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-
-function quickAsk(text) { textarea.value = text; sendMessage(); }
-
-function md(text) {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^#{3,4}\s(.+)$/gm, '<h3>$1</h3>')
-    .replace(/^\d+\.\s(.+)$/gm, (_, i) => `<li>${i}</li>`)
-    .replace(/((?:<li>.*<\/li>\n?)+)/g, m => `<ol>${m}</ol>`)
-    .replace(/^[-•]\s(.+)$/gm, (_, i) => `<li>${i}</li>`)
-    .split('\n\n').map(p => {
-      p = p.trim();
-      if (!p) return '';
-      if (/^<(h3|ol|ul)/.test(p)) return p;
-      return `<p>${p.replace(/\n/g,'<br>')}</p>`;
-    }).join('');
-}
-
-function addMsg(role, content) {
-  const wrap = document.getElementById('messages');
-  const d = document.createElement('div');
-  d.className = `msg ${role}`;
-  const av = document.createElement('div');
-  av.className = 'avatar';
-  av.textContent = role === 'bot' ? '🧠' : 'YOU';
-  const b = document.createElement('div');
-  b.className = 'bubble';
-  if (role === 'bot') b.innerHTML = md(content); else b.textContent = content;
-  d.appendChild(av); d.appendChild(b);
-  wrap.appendChild(d);
-  wrap.scrollTop = wrap.scrollHeight;
-}
-
-function showTyping() {
-  const wrap = document.getElementById('messages');
-  const d = document.createElement('div');
-  d.className = 'msg bot'; d.id = 'typing';
-  const av = document.createElement('div'); av.className = 'avatar'; av.textContent = '🧠';
-  const b = document.createElement('div'); b.className = 'bubble';
-  b.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
-  d.appendChild(av); d.appendChild(b); wrap.appendChild(d);
-  wrap.scrollTop = wrap.scrollHeight;
-}
-function hideTyping() { const el = document.getElementById('typing'); if (el) el.remove(); }
-
-function toast(msg) {
-  document.querySelector('.toast')?.remove();
-  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-  document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
-}
-
-async function callAPI(messages, maxTokens = 1024) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: maxTokens, system: SYSTEM_PROMPT, messages })
-  });
-  if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || `API error ${res.status}`); }
-  const data = await res.json();
-  return data.content?.[0]?.text || '';
-}
-
-async function sendMessage() {
-  if (loading) return;
-  const input = document.getElementById('user-input');
-  const text = input.value.trim();
-  if (!text) return;
-  if (API_KEY === 'YOUR_API_KEY_HERE') { toast('⚠️ Add your Anthropic API key to index.html'); return; }
-  input.value = ''; input.style.height = 'auto';
-  document.getElementById('send-btn').disabled = true;
-  loading = true;
-  addMsg('user', text);
-  history.push({ role: 'user', content: text });
-  showTyping();
-  try {
-    const reply = await callAPI(history);
-    hideTyping();
-    addMsg('bot', reply);
-    history.push({ role: 'assistant', content: reply });
-    if (history.length > 40) history = history.slice(-40);
-  } catch(err) {
-    hideTyping();
-    toast('⚠️ ' + (err.message || 'Something went wrong. Check your API key.'));
-    history.pop();
-  }
-  loading = false;
-  document.getElementById('send-btn').disabled = false;
-  input.focus();
-}
-
-// Opening greeting
-window.addEventListener('load', async () => {
-  if (API_KEY === 'YOUR_API_KEY_HERE') {
-    addMsg('bot', "👋 Hi! I'm **Rich's Brain** — but I need an API key to get started.\n\nOpen **index.html** in a text editor, find `YOUR_API_KEY_HERE`, and replace it with your Anthropic API key from [console.anthropic.com](https://console.anthropic.com).");
-    return;
-  }
-  document.getElementById('send-btn').disabled = true;
-  loading = true;
-  showTyping();
-  try {
-    const reply = await callAPI([{ role: 'user', content: "greet me as Rich's Brain in 1-2 friendly sentences then ask what tech problem you can help with" }], 150);
-    hideTyping();
-    addMsg('bot', reply);
-    history.push({ role: 'assistant', content: reply });
-  } catch {
-    hideTyping();
-    addMsg('bot', "Hey there! I'm **Rich's Brain** 🧠 — your Perry Community Schools tech support assistant. What's going on with your tech today?");
-  }
-  loading = false;
-  document.getElementById('send-btn').disabled = false;
-});
-</script>
-</body>
-</html>
+};
